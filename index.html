@@ -1044,9 +1044,11 @@ function getXlsxMatch(r){
 }
 function verifyDiffs(r,m){
   const tol=0.005;
-  const dAmt=Math.round((r.amt-m.amt)*100)/100;
-  const dDisc=Math.round((r.discount-m.disc)*100)/100;
-  const dNet=Math.round((r.net-m.net)*100)/100;
+  // Diffs are S2K value minus the app's (target) value, so e.g. an S2K
+  // discount that's $0.02 too high shows as Disc +$0.02.
+  const dAmt=Math.round((m.amt-r.amt)*100)/100;
+  const dDisc=Math.round((m.disc-r.discount)*100)/100;
+  const dNet=Math.round((m.net-r.net)*100)/100;
   return {dAmt,dDisc,dNet,ok:Math.abs(dAmt)<tol&&Math.abs(dDisc)<tol&&Math.abs(dNet)<tol};
 }
 function verifyBadge(r){
