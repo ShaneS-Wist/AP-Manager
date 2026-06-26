@@ -77,6 +77,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ISG Invoice Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --ink:#1a1f2e;--ink2:#4a5068;--ink3:#8b92a9;
@@ -161,6 +162,9 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .bC{background:var(--cdim);color:#5b21b6}.bP{background:var(--pdim);color:var(--paid)}
 .bD{background:var(--ddim);color:#991b1b}.bDue{background:var(--adim);color:#1e40af}
 .cbuy{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink3)}
+.vchk,.vx{margin-left:6px;display:inline-flex;align-items:center;gap:4px;font-size:11px}
+.vdiff{font-size:10px;font-weight:700;color:var(--danger);background:var(--ddim);padding:1px 5px;border-radius:8px;white-space:nowrap}
+.cdv{margin-left:3px;font-size:9px}
 .empty{text-align:center;padding:48px 24px;color:var(--ink3)}
 .empty .ei{font-size:40px;margin-bottom:12px}
 .empty h3{font-size:15px;color:var(--ink2);margin-bottom:6px}
@@ -559,6 +563,21 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
         </div>
         <button class="run-btn" id="runImportBtn" onclick="runImport()" disabled="">Run Import</button>
         <div class="log-box" id="importLog">Ready — load CSV files above to begin.</div>
+      </div>
+
+      <!-- VERIFY -->
+      <div class="mgmt-section">
+        <div class="mgmt-section-title">🔎 Verify Against S2K Export</div>
+        <p>Drop the latest S2K_Invoices.xlsx export. Each invoice is matched by its vendor invoice number and its Invoice Amount, Discount Amount and Net Amount are compared (multiple xlsx rows for the same invoice are summed). A green check marks a match; a red ✕ with the dollar difference marks a mismatch. Badges appear on cards, the invoice modal and calendar days.</p>
+        <div class="drop-zone" id="dzXlsx">
+          <input type="file" accept=".xlsx,.xls" onchange="loadXlsxFile(this)">
+          <div class="drop-icon">📑</div>
+          <div class="drop-label" id="dzXlsxLabel">S2K_Invoices.xlsx</div>
+          <div class="drop-sub">Click or drag to load</div>
+        </div>
+        <button class="run-btn" id="runVerifyBtn" onclick="runVerify()" disabled>Run Verification</button>
+        <button class="run-btn danger" id="clearVerifyBtn" onclick="clearVerify()" style="margin-top:8px" disabled>Clear Verification</button>
+        <div class="log-box" id="verifyLog">Ready — load S2K_Invoices.xlsx above to begin.</div>
       </div>
 
       <!-- PURGE -->
@@ -1014,6 +1033,90 @@ function normalizeDate(s){
   return s;
 }
 
+
+// ── XLSX VERIFICATION ────────────────────────────────────────────
+let pendingXlsx=null;
+let xlsxInvoices=null; // key (vendor invoice digits) -> {amt,disc,net,count}
+function xlsxKey(id){return String(id||'').replace(/^000/,'').replace(/-IN$/i,'').trim();}
+function getXlsxMatch(r){
+  if(!xlsxInvoices)return null;
+  return xlsxInvoices[xlsxKey(r.id)]||null;
+}
+function verifyDiffs(r,m){
+  const tol=0.005;
+  const dAmt=Math.round((r.amt-m.amt)*100)/100;
+  const dDisc=Math.round((r.discount-m.disc)*100)/100;
+  const dNet=Math.round((r.net-m.net)*100)/100;
+  return {dAmt,dDisc,dNet,ok:Math.abs(dAmt)<tol&&Math.abs(dDisc)<tol&&Math.abs(dNet)<tol};
+}
+function verifyBadge(r){
+  const m=getXlsxMatch(r);
+  if(!m)return '';
+  const v=verifyDiffs(r,m);
+  if(v.ok)return '<span class="vchk" title="Matches S2K export">✅</span>';
+  const parts=[];
+  if(Math.abs(v.dAmt)>=0.005)parts.push('Amt '+(v.dAmt>0?'+$':'-$')+Math.abs(v.dAmt).toFixed(2));
+  if(Math.abs(v.dDisc)>=0.005)parts.push('Disc '+(v.dDisc>0?'+$':'-$')+Math.abs(v.dDisc).toFixed(2));
+  if(Math.abs(v.dNet)>=0.005)parts.push('Net '+(v.dNet>0?'+$':'-$')+Math.abs(v.dNet).toFixed(2));
+  return '<span class="vx" title="Mismatch vs S2K export">❌<span class="vdiff">'+parts.join(' · ')+'</span></span>';
+}
+function dayVerifyIcon(inv){
+  const matched=inv.filter(r=>getXlsxMatch(r));
+  if(!matched.length)return '';
+  const anyBad=matched.some(r=>!verifyDiffs(r,getXlsxMatch(r)).ok);
+  return '<span class="cdv" title="S2K verification">'+(anyBad?'❌':'✅')+'</span>';
+}
+function loadXlsxFile(input){
+  const file=input.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=new Uint8Array(e.target.result);
+      const wb=XLSX.read(data,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      pendingXlsx=rows;
+      $('dzXlsx').classList.add('loaded');
+      $('dzXlsxLabel').textContent=`✓ ${file.name} (${rows.length} rows)`;
+      $('runVerifyBtn').disabled=false;
+      log('verifyLog',`Loaded ${rows.length} rows from ${file.name}`);
+    }catch(err){log('verifyLog','Error reading file: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function runVerify(){
+  if(!pendingXlsx){return;}
+  const map={};
+  pendingXlsx.forEach(row=>{
+    const vi=String(row['Vendor Invoice']||'').trim();
+    if(!vi)return;
+    const amt=parseMoney(row['Invoice Amount']);
+    const disc=parseMoney(row['Discount Amount']);
+    if(!map[vi])map[vi]={amt:0,disc:0,count:0};
+    map[vi].amt+=amt;map[vi].disc+=disc;map[vi].count++;
+  });
+  Object.keys(map).forEach(k=>{
+    map[k].amt=Math.round(map[k].amt*100)/100;
+    map[k].disc=Math.round(map[k].disc*100)/100;
+    map[k].net=Math.round((map[k].amt-map[k].disc)*100)/100;
+  });
+  xlsxInvoices=map;
+  $('clearVerifyBtn').disabled=false;
+  render();
+  log('verifyLog',`✓ Verification loaded — ${Object.keys(map).length} unique invoice numbers ready for matching.`);
+  showToast('Verification loaded');
+}
+function clearVerify(){
+  xlsxInvoices=null;pendingXlsx=null;
+  $('dzXlsx').classList.remove('loaded');
+  $('dzXlsxLabel').textContent='S2K_Invoices.xlsx';
+  $('runVerifyBtn').disabled=true;
+  $('clearVerifyBtn').disabled=true;
+  log('verifyLog','Verification cleared.');
+  render();
+  showToast('Verification cleared');
+}
+
 // ── MANAGEMENT PANEL ──────────────────────────────────────────────
 function openMgmt(){$('mgmtOv').classList.add('on');document.body.style.overflow='hidden';}
 function closeMgmt(e){if(e.target===$('mgmtOv'))closeMgmtNow();}
@@ -1337,7 +1440,7 @@ function render(){
     const bc=sk==='O'?'bO':sk==='R'?'bR':sk==='C'?'bC':'bP';
     const bl=sk==='R'?'Ready to Pay':r.status;
     return `<div class="card s${sk}" onclick="openM('${r.id}')">
-      <div class="ctop"><div class="cid">${r.id}</div><div class="amt-wrap">${renderTagBadges(r.tags)}${r.flagged?'<span class="flag-dot" title="Needs attention"></span>':''}<div class="camt${r.amt<0?' neg':''}">${fmtSigned(r.amt)}</div></div></div>
+      <div class="ctop"><div class="cid">${r.id}${verifyBadge(r)}</div><div class="amt-wrap">${renderTagBadges(r.tags)}${r.flagged?'<span class="flag-dot" title="Needs attention"></span>':''}<div class="camt${r.amt<0?' neg':''}">${fmtSigned(r.amt)}</div></div></div>
       <div class="csup">${r.supplier}</div>
       <div class="cmeta">
         <span class="badge ${bc}">${bl}</span>
@@ -1377,7 +1480,7 @@ function renderCal(){
       counts[c]=(counts[c]||0)+1;
     });
     const dots=['dD','dO','dR','dC','dP'].filter(c=>counts[c]).map(c=>`<span class="dchip ${c}">${counts[c]}</span>`).join('');
-    const netStr=inv.length?`<div class="cdnet${hasOv?' ov':''}${net<0?' negnet':''}">${fmtSigned(net)}</div>`:'';
+    const netStr=inv.length?`<div class="cdnet${hasOv?' ov':''}${net<0?' negnet':''}">${fmtSigned(net)}${dayVerifyIcon(inv)}</div>`:'';
     const oc=inv.length?`onclick="dayClick(${day})"`:'';
     h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${netStr}</div>`;
   }
@@ -1408,7 +1511,7 @@ function dayClick(day){
       lastSup=sup;gA=0;gD=0;gN=0;
     }
     gA+=(r.amt||0);gD+=(r.discount||0);gN+=(r.net||0);
-    dpH+='<div class="dpop-item" onclick="openedFromDpop=true;$(\'dpopOv\').classList.remove(\'on\');openM(\''+r.id+'\')"><div><div class="dpi-id">'+r.id+'</div><div class="dpi-sup">PO '+(r.po||'\u2014')+' \u00b7 VI '+(r.vendorInvoice||'\u2014')+'</div><span class="badge '+bc(sk(r))+'" style="margin-top:4px">'+r.status+'</span></div><div><div class="dpi-amt'+(r.amt<0?' neg':'')+'">'+renderTagBadges(r.tags)+(r.flagged?'<span class="flag-dot" title="Needs attention"></span>':'')+fmtSigned(r.amt)+'</div><div class="dpi-buy" style="font-size:10px">Disc '+fmtSigned(r.discount)+' \u00b7 Net '+fmtSigned(r.net)+'</div></div></div>';
+    dpH+='<div class="dpop-item" onclick="openedFromDpop=true;$(\'dpopOv\').classList.remove(\'on\');openM(\''+r.id+'\')"><div><div class="dpi-id">'+r.id+verifyBadge(r)+'</div><div class="dpi-sup">PO '+(r.po||'\u2014')+' \u00b7 VI '+(r.vendorInvoice||'\u2014')+'</div><span class="badge '+bc(sk(r))+'" style="margin-top:4px">'+r.status+'</span></div><div><div class="dpi-amt'+(r.amt<0?' neg':'')+'">'+renderTagBadges(r.tags)+(r.flagged?'<span class="flag-dot" title="Needs attention"></span>':'')+fmtSigned(r.amt)+'</div><div class="dpi-buy" style="font-size:10px">Disc '+fmtSigned(r.discount)+' \u00b7 Net '+fmtSigned(r.net)+'</div></div></div>';
   });
   if(lastSup)dpH+='<div class="dpop-subtotal"><span class="sub-label">Subtotal</span><span>'+fmtSigned(gA)+'</span><span>'+fmtSigned(gD)+'</span><span>'+fmtSigned(gN)+'</span></div>';
   $('dpopL').innerHTML=dpH;
@@ -1424,7 +1527,7 @@ function openM(id){
   editId=id;editSt=r.status;editFlag=!!r.flagged;
   originalFlag=!!r.flagged;
   editTags=(r.tags||[]).map(function(t){return {name:t.name,color:t.color};});
-  $('mId').textContent=r.id;$('mSup').textContent=r.supplier;
+  $('mId').innerHTML=r.id+verifyBadge(r);$('mSup').textContent=r.supplier;
   $('mAmt').textContent=fmtSigned(r.amt);$('mAmt').className='mamt'+(r.amt<0?' neg':'');
   currentPdfPath=pdfWindowsPath(r.id);
   $('mIDate').textContent=fmtD(r.invoiceDate);$('mDDate').textContent=fmtD(r.dueDate);
