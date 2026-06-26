@@ -177,13 +177,12 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .cd.om{background:transparent;cursor:default}.cd.today{border-color:var(--accent);background:var(--adim)}
 .cd:not(.om):hover{border-color:var(--accent)}
 .cdn{font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:2px}.cd.today .cdn{color:var(--accent)}
-.cddots{display:flex;flex-wrap:wrap;gap:2px;margin-bottom:2px}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%}
+.cddots{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px}
+.dchip{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;padding:0 3px;border-radius:7px;font-size:9px;font-weight:700;color:#fff;line-height:1}
 .dO{background:var(--open)}.dR{background:var(--ready)}.dC{background:var(--credit)}.dD{background:var(--danger)}.dP{background:var(--paid)}
 .cdnet{font-size:9px;font-weight:800;color:var(--ink2);line-height:1.2;margin-top:1px}
 .cdnet.ov{color:var(--danger)}
 .cdnet.negnet{color:var(--credit)}
-.cdmore{font-size:9px;font-weight:800;color:var(--ink3)}
 
 /* DAY POPUP */
 .dpop-ov{position:fixed;inset:0;background:rgba(26,31,46,.45);z-index:150;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .15s}
@@ -260,10 +259,10 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .savebtn:hover{background:var(--accent)}
 .flag-btn-on{background:var(--danger)!important;color:#fff!important}
 .notify-row{display:flex;flex-direction:column;gap:6px}
-.notify-multi{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:var(--font);color:var(--ink);background:var(--card);outline:none;min-height:60px}
-.notify-multi:focus{border-color:var(--accent)}
-.notify-multi option{padding:3px 6px}
-.notify-multi option:checked{background:var(--accent);color:#fff}
+.notify-multi{width:100%;padding:4px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);color:var(--ink);background:var(--card);max-height:160px;overflow-y:auto}
+.notify-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.notify-opt:hover{background:var(--adim)}
+.notify-opt input{width:15px;height:15px;cursor:pointer;accent-color:var(--accent)}
 .tag-sec{margin:10px 0}
 .tag-sec .stlbl{margin-bottom:6px}
 .tag-pills{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;min-height:24px}
@@ -514,8 +513,7 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
       <div class="stctl">
         <div class="stlbl">Notify Users</div>
         <div class="notify-row">
-          <select class="notify-multi" id="notifyUsers" multiple></select>
-          <div style="font-size:10px;color:var(--ink3);margin-top:2px">Hold Ctrl/Cmd to select multiple</div>
+          <div class="notify-multi" id="notifyUsers"></div>
         </div>
       </div>
       <div class="fsec">
@@ -884,7 +882,7 @@ function addNote(){
   ensureNoteArray(r);
   const entry={text:txt, by:APP_NAME||APP_USER||'Unknown', at:new Date().toISOString()};
   r.notes.push(entry);
-  r.notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});
+  r.notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});
   renderNoteLog(r.notes);
   $('mNotes').value='';
   markDirty();
@@ -1372,15 +1370,16 @@ function renderCal(){
     const inv=byDay[day]||[];
     const net=inv.reduce((s,r)=>s+(r.net||0),0);
     const hasOv=inv.some(r=>r.daysOverdue>0&&r.status!=='Paid');
-    const dots=inv.slice(0,8).map(r=>{
+    const counts={};
+    inv.forEach(r=>{
       const ov=r.daysOverdue>0&&r.status!=='Paid';
       const c=ov?'dD':r.status==='Ready to Pay'?'dR':r.status==='Credit Created'?'dC':r.status==='Paid'?'dP':'dO';
-      return `<span class="dot ${c}"></span>`;
-    }).join('');
-    const extra=inv.length>8?`<div class="cdmore">+${inv.length-8}</div>`:'';
+      counts[c]=(counts[c]||0)+1;
+    });
+    const dots=['dD','dO','dR','dC','dP'].filter(c=>counts[c]).map(c=>`<span class="dchip ${c}">${counts[c]}</span>`).join('');
     const netStr=inv.length?`<div class="cdnet${hasOv?' ov':''}${net<0?' negnet':''}">${fmtSigned(net)}</div>`:'';
     const oc=inv.length?`onclick="dayClick(${day})"`:'';
-    h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${extra}${netStr}</div>`;
+    h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${netStr}</div>`;
   }
   $('calG').innerHTML=h;
 }
@@ -1454,7 +1453,7 @@ function openM(id){
   $('flagBtn').textContent=editFlag?'🔴 Needs Attention':'Needs Attention';
   populateNotifyDropdowns();
   var _nr=[...ACTIVE,...PAID].find(function(x){return x.id===editId;});
-  if(_nr){var _emails=[_nr.notifyEmail1,_nr.notifyEmail2].concat(_nr.notifyEmails||[]).filter(Boolean);Array.from($('notifyUsers').options).forEach(function(o){o.selected=_emails.indexOf(o.value)!==-1;});}
+  if(_nr){var _emails=[_nr.notifyEmail1,_nr.notifyEmail2].concat(_nr.notifyEmails||[]).filter(Boolean);Array.from($('notifyUsers').querySelectorAll('input')).forEach(function(o){o.checked=_emails.indexOf(o.value)!==-1;});}
   renderTagPills();
   $('mov').classList.add('on');document.body.style.overflow='hidden';
 }
@@ -1472,7 +1471,7 @@ function toggleFlag(){
   $('flagBtn').textContent=editFlag?'🔴 Needs Attention':'Needs Attention';
 }
 function populateNotifyDropdowns(){
-  var opts=APP_PROFILES.map(function(p){return '<option value="'+p.email+'">'+p.name+'</option>';}).join('');
+  var opts=APP_PROFILES.map(function(p){return '<label class="notify-opt"><input type="checkbox" value="'+p.email+'">'+p.name+'</label>';}).join('');
   $('notifyUsers').innerHTML=opts;
 }
 function saveInv(){
@@ -1489,12 +1488,12 @@ function saveInv(){
   let idx=ACTIVE.findIndex(r=>r.id===editId);
   if(idx!==-1){
     ACTIVE[idx].status=editSt;ACTIVE[idx].buyer=buyer;ACTIVE[idx].flagged=editFlag;
-    ACTIVE[idx].notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});ACTIVE[idx].tags=editTags;
+    ACTIVE[idx].notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});ACTIVE[idx].tags=editTags;
     if(editSt==='Paid'||editSt==='Credited'){PAID.unshift({...ACTIVE[idx]});savedRow={...ACTIVE[idx]};ACTIVE.splice(idx,1);}
     else{savedRow=ACTIVE[idx];}
   } else {
     idx=PAID.findIndex(r=>r.id===editId);
-    if(idx!==-1){PAID[idx].status=editSt;PAID[idx].buyer=buyer;PAID[idx].flagged=editFlag;PAID[idx].notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});PAID[idx].tags=editTags;savedRow=PAID[idx];}
+    if(idx!==-1){PAID[idx].status=editSt;PAID[idx].buyer=buyer;PAID[idx].flagged=editFlag;PAID[idx].notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});PAID[idx].tags=editTags;savedRow=PAID[idx];}
   }
   if(savedRow){
     const flagJustTurnedOn = editFlag && !originalFlag;
@@ -1631,13 +1630,12 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .cd.om{background:transparent;cursor:default}.cd.today{border-color:var(--accent);background:var(--adim)}
 .cd:not(.om):hover{border-color:var(--accent)}
 .cdn{font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:2px}.cd.today .cdn{color:var(--accent)}
-.cddots{display:flex;flex-wrap:wrap;gap:2px;margin-bottom:2px}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%}
+.cddots{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px}
+.dchip{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;padding:0 3px;border-radius:7px;font-size:9px;font-weight:700;color:#fff;line-height:1}
 .dO{background:var(--open)}.dR{background:var(--ready)}.dC{background:var(--credit)}.dD{background:var(--danger)}.dP{background:var(--paid)}
 .cdnet{font-size:9px;font-weight:800;color:var(--ink2);line-height:1.2;margin-top:1px}
 .cdnet.ov{color:var(--danger)}
 .cdnet.negnet{color:var(--credit)}
-.cdmore{font-size:9px;font-weight:800;color:var(--ink3)}
 
 /* DAY POPUP */
 .dpop-ov{position:fixed;inset:0;background:rgba(26,31,46,.45);z-index:150;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .15s}
@@ -1714,10 +1712,10 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .savebtn:hover{background:var(--accent)}
 .flag-btn-on{background:var(--danger)!important;color:#fff!important}
 .notify-row{display:flex;flex-direction:column;gap:6px}
-.notify-multi{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:var(--font);color:var(--ink);background:var(--card);outline:none;min-height:60px}
-.notify-multi:focus{border-color:var(--accent)}
-.notify-multi option{padding:3px 6px}
-.notify-multi option:checked{background:var(--accent);color:#fff}
+.notify-multi{width:100%;padding:4px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);color:var(--ink);background:var(--card);max-height:160px;overflow-y:auto}
+.notify-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.notify-opt:hover{background:var(--adim)}
+.notify-opt input{width:15px;height:15px;cursor:pointer;accent-color:var(--accent)}
 .tag-sec{margin:10px 0}
 .tag-sec .stlbl{margin-bottom:6px}
 .tag-pills{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;min-height:24px}
@@ -1976,8 +1974,7 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
       <div class="stctl">
         <div class="stlbl">Notify Users</div>
         <div class="notify-row">
-          <select class="notify-multi" id="notifyUsers" multiple></select>
-          <div style="font-size:10px;color:var(--ink3);margin-top:2px">Hold Ctrl/Cmd to select multiple</div>
+          <div class="notify-multi" id="notifyUsers"></div>
         </div>
       </div>
       <div class="fsec">
@@ -2333,7 +2330,7 @@ function addNote(){
   ensureNoteArray(r);
   const entry={text:txt, by:APP_NAME||APP_USER||'Unknown', at:new Date().toISOString()};
   r.notes.push(entry);
-  r.notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});
+  r.notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});
   renderNoteLog(r.notes);
   $('mNotes').value='';
   markDirty();
@@ -2870,15 +2867,16 @@ function renderCal(){
     const inv=byDay[day]||[];
     const net=inv.reduce((s,r)=>s+(r.amt||0),0);
     const hasOv=inv.some(r=>r.daysOverdue>0&&r.status!=='Paid');
-    const dots=inv.slice(0,8).map(r=>{
+    const counts={};
+    inv.forEach(r=>{
       const ov=r.daysOverdue>0&&r.status!=='Paid';
       const c=ov?'dD':r.status==='Ready to Pay'?'dR':r.type==='Credit Memo'?'dC':r.status==='Paid'?'dP':'dO';
-      return `<span class="dot ${c}"></span>`;
-    }).join('');
-    const extra=inv.length>8?`<div class="cdmore">+${inv.length-8}</div>`:'';
+      counts[c]=(counts[c]||0)+1;
+    });
+    const dots=['dD','dO','dR','dC','dP'].filter(c=>counts[c]).map(c=>`<span class="dchip ${c}">${counts[c]}</span>`).join('');
     const netStr=inv.length?`<div class="cdnet${hasOv?' ov':''}${net<0?' negnet':''}">${fmtSigned(net)}</div>`:'';
     const oc=inv.length?`onclick="dayClick(${day})"`:'';
-    h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${extra}${netStr}</div>`;
+    h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${netStr}</div>`;
   }
   $('calG').innerHTML=h;
 }
@@ -2953,7 +2951,7 @@ function openM(id){
   $('flagBtn').textContent=editFlag?'🔴 Needs Attention':'Needs Attention';
   populateNotifyDropdowns();
   var _nr=[...ACTIVE,...PAID].find(function(x){return x.id===editId;});
-  if(_nr){var _emails=[_nr.notifyEmail1,_nr.notifyEmail2].concat(_nr.notifyEmails||[]).filter(Boolean);Array.from($('notifyUsers').options).forEach(function(o){o.selected=_emails.indexOf(o.value)!==-1;});}
+  if(_nr){var _emails=[_nr.notifyEmail1,_nr.notifyEmail2].concat(_nr.notifyEmails||[]).filter(Boolean);Array.from($('notifyUsers').querySelectorAll('input')).forEach(function(o){o.checked=_emails.indexOf(o.value)!==-1;});}
   renderTagPills();
   $('mov').classList.add('on');document.body.style.overflow='hidden';
 }
@@ -2965,7 +2963,7 @@ function toggleFlag(){
   $('flagBtn').textContent=editFlag?'🔴 Needs Attention':'Needs Attention';
 }
 function populateNotifyDropdowns(){
-  var opts=APP_PROFILES.map(function(p){return '<option value="'+p.email+'">'+p.name+'</option>';}).join('');
+  var opts=APP_PROFILES.map(function(p){return '<label class="notify-opt"><input type="checkbox" value="'+p.email+'">'+p.name+'</label>';}).join('');
   $('notifyUsers').innerHTML=opts;
 }
 function pickDisc(v,el){
@@ -2998,13 +2996,13 @@ function saveInv(){
   let idx=ACTIVE.findIndex(r=>r.id===editId);
   if(idx!==-1){
     ACTIVE[idx].status=editSt;ACTIVE[idx].program=program;ACTIVE[idx].flagged=editFlag;
-    ACTIVE[idx].notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});ACTIVE[idx].tags=editTags;
+    ACTIVE[idx].notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});ACTIVE[idx].tags=editTags;
     applyDiscChange(ACTIVE[idx]);
     if(editSt==='Paid'){PAID.unshift({...ACTIVE[idx]});savedRow={...ACTIVE[idx]};ACTIVE.splice(idx,1);}
     else{savedRow=ACTIVE[idx];}
   } else {
     idx=PAID.findIndex(r=>r.id===editId);
-    if(idx!==-1){PAID[idx].status=editSt;PAID[idx].program=program;PAID[idx].flagged=editFlag;PAID[idx].notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});PAID[idx].tags=editTags;applyDiscChange(PAID[idx]);savedRow=PAID[idx];}
+    if(idx!==-1){PAID[idx].status=editSt;PAID[idx].program=program;PAID[idx].flagged=editFlag;PAID[idx].notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});PAID[idx].tags=editTags;applyDiscChange(PAID[idx]);savedRow=PAID[idx];}
   }
   if(savedRow){
     const flagJustTurnedOn = editFlag && !originalFlag;
@@ -3143,12 +3141,10 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .cd.om{background:transparent;cursor:default}.cd.today{border-color:var(--accent);background:var(--adim)}
 .cd:not(.om):hover{border-color:var(--accent)}
 .cdn{font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:2px}.cd.today .cdn{color:var(--accent)}
-.cddots{display:flex;flex-wrap:wrap;gap:2px;margin-bottom:2px}
-.dot{display:inline-block;width:6px;height:6px;border-radius:50%}
+.cddots{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px}
+.dchip{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;padding:0 3px;border-radius:7px;font-size:9px;font-weight:700;color:#fff;line-height:1}
 .dO{background:var(--open)} .dR{background:var(--ready)}
 .cdnet{font-size:9px;font-weight:800;color:var(--ink2);line-height:1.2;margin-top:1px}
-.cdcount{font-size:9px;font-weight:800;color:var(--ink3)}
-.cdcount.has-open{color:var(--open)}
 
 /* DAY POPUP */
 .dpop-ov{position:fixed;inset:0;background:rgba(26,31,46,.45);z-index:150;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .15s}
@@ -3225,10 +3221,10 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
 .savebtn:hover{background:var(--accent)}
 .flag-btn-on{background:var(--danger)!important;color:#fff!important}
 .notify-row{display:flex;flex-direction:column;gap:6px}
-.notify-multi{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:var(--font);color:var(--ink);background:var(--card);outline:none;min-height:60px}
-.notify-multi:focus{border-color:var(--accent)}
-.notify-multi option{padding:3px 6px}
-.notify-multi option:checked{background:var(--accent);color:#fff}
+.notify-multi{width:100%;padding:4px;border:1.5px solid var(--border);border-radius:var(--rs);font-family:var(--font);color:var(--ink);background:var(--card);max-height:160px;overflow-y:auto}
+.notify-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.notify-opt:hover{background:var(--adim)}
+.notify-opt input{width:15px;height:15px;cursor:pointer;accent-color:var(--accent)}
 .tag-sec{margin:10px 0}
 .tag-sec .stlbl{margin-bottom:6px}
 .tag-pills{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;min-height:24px}
@@ -3448,8 +3444,7 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
       <div class="stctl">
         <div class="stlbl">Notify Users</div>
         <div class="notify-row">
-          <select class="notify-multi" id="notifyUsers" multiple></select>
-          <div style="font-size:10px;color:var(--ink3);margin-top:2px">Hold Ctrl/Cmd to select multiple</div>
+          <div class="notify-multi" id="notifyUsers"></div>
         </div>
       </div>
 
@@ -3680,7 +3675,7 @@ function addNote(){
   ensureNoteArray(r);
   const entry={text:txt, by:APP_NAME||APP_USER||'Unknown', at:new Date().toISOString()};
   r.notes.push(entry);
-  r.notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});
+  r.notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});
   renderNoteLog(r.notes);
   $('mNotes').value='';
   markDirty();
@@ -4184,14 +4179,11 @@ function renderCal(){
     const inv=byDay[day]||[];
     const total_=inv.reduce((s,r)=>s+(r.invoiceTotal||0),0);
     const openCount=inv.filter(r=>r.status==='Open').length;
-    const dots=inv.slice(0,8).map(r=>{
-      const c=r.status==='Open'?'dO':'dR';
-      return `<span class="dot ${c}"></span>`;
-    }).join('');
-    const extra=inv.length>8?`<div class="cdcount${openCount>0?' has-open':''}">+${inv.length-8}</div>`:'';
+    const readyCount=inv.length-openCount;
+    const dots=[openCount?`<span class="dchip dO">${openCount}</span>`:'',readyCount?`<span class="dchip dR">${readyCount}</span>`:''].join('');
     const totStr=inv.length?`<div class="cdnet">${fmt(total_)}</div>`:'';
     const oc=inv.length?`onclick="dayClick(${day})"`:'';
-    h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${extra}${totStr}</div>`;
+    h+=`<div class="cd${iT?' today':''}" ${oc}><div class="cdn">${day}</div><div class="cddots">${dots}</div>${totStr}</div>`;
   }
   $('calG').innerHTML=h;
 }
@@ -4260,7 +4252,7 @@ function openM(id){
   $('flagBtn').classList.toggle('flag-btn-on',editFlag);
   $('flagBtn').textContent=editFlag?'🔴 Needs Attention':'Needs Attention';
   populateNotifyDropdowns();
-  var _emails=[r.notifyEmail1,r.notifyEmail2].concat(r.notifyEmails||[]).filter(Boolean);Array.from($('notifyUsers').options).forEach(function(o){o.selected=_emails.indexOf(o.value)!==-1;});
+  var _emails=[r.notifyEmail1,r.notifyEmail2].concat(r.notifyEmails||[]).filter(Boolean);Array.from($('notifyUsers').querySelectorAll('input')).forEach(function(o){o.checked=_emails.indexOf(o.value)!==-1;});
   renderTagPills();
 
   ensureNoteArray(r);
@@ -4277,7 +4269,7 @@ function toggleFlag(){
   $('flagBtn').textContent=editFlag?'🔴 Needs Attention':'Needs Attention';
 }
 function populateNotifyDropdowns(){
-  var opts=APP_PROFILES.map(function(p){return '<option value="'+p.email+'">'+p.name+'</option>';}).join('');
+  var opts=APP_PROFILES.map(function(p){return '<label class="notify-opt"><input type="checkbox" value="'+p.email+'">'+p.name+'</label>';}).join('');
   $('notifyUsers').innerHTML=opts;
 }
 
@@ -4302,7 +4294,7 @@ function saveInv(){
   const idx=RECORDS.findIndex(r=>r.id===editId);
   if(idx===-1)return;
   RECORDS[idx].flagged=editFlag;
-  RECORDS[idx].notifyEmails=Array.from($('notifyUsers').selectedOptions).map(function(o){return o.value;});
+  RECORDS[idx].notifyEmails=Array.from($('notifyUsers').querySelectorAll('input:checked')).map(function(o){return o.value;});
   RECORDS[idx].tags=editTags;
   // Allow editing S2k fields even after resolution (per requirement)
   if(RECORDS[idx].status==='Resolved'){
