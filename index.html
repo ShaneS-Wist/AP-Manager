@@ -1040,6 +1040,7 @@ let xlsxInvoices=null; // key (vendor invoice digits) -> {amt,disc,net,count}
 function xlsxKey(id){return String(id||'').replace(/^000/,'').replace(/-IN$/i,'').trim();}
 function getXlsxMatch(r){
   if(!xlsxInvoices)return null;
+  if(isPaidStatus(r.status))return null;
   return xlsxInvoices[xlsxKey(r.id)]||null;
 }
 function verifyDiffs(r,m){
