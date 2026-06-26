@@ -77,7 +77,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ISG Invoice Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --ink:#1a1f2e;--ink2:#4a5068;--ink3:#8b92a9;
@@ -1067,23 +1066,39 @@ function dayVerifyIcon(inv){
   const anyBad=matched.some(r=>!verifyDiffs(r,getXlsxMatch(r)).ok);
   return '<span class="cdv" title="S2K verification">'+(anyBad?'❌':'✅')+'</span>';
 }
+let xlsxLibLoading=null;
+function loadXlsxLib(){
+  if(window.XLSX)return Promise.resolve();
+  if(xlsxLibLoading)return xlsxLibLoading;
+  xlsxLibLoading=new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error('Could not load XLSX library (check network/CDN access)'));
+    document.head.appendChild(s);
+  });
+  return xlsxLibLoading;
+}
 function loadXlsxFile(input){
   const file=input.files[0]; if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const data=new Uint8Array(e.target.result);
-      const wb=XLSX.read(data,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
-      pendingXlsx=rows;
-      $('dzXlsx').classList.add('loaded');
-      $('dzXlsxLabel').textContent=`✓ ${file.name} (${rows.length} rows)`;
-      $('runVerifyBtn').disabled=false;
-      log('verifyLog',`Loaded ${rows.length} rows from ${file.name}`);
-    }catch(err){log('verifyLog','Error reading file: '+err.message);}
-  };
-  reader.readAsArrayBuffer(file);
+  log('verifyLog','Loading XLSX library…');
+  loadXlsxLib().then(()=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const data=new Uint8Array(e.target.result);
+        const wb=XLSX.read(data,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        pendingXlsx=rows;
+        $('dzXlsx').classList.add('loaded');
+        $('dzXlsxLabel').textContent=`✓ ${file.name} (${rows.length} rows)`;
+        $('runVerifyBtn').disabled=false;
+        log('verifyLog',`Loaded ${rows.length} rows from ${file.name}`);
+      }catch(err){log('verifyLog','Error reading file: '+err.message);}
+    };
+    reader.readAsArrayBuffer(file);
+  }).catch(err=>{log('verifyLog',err.message);});
 }
 function runVerify(){
   if(!pendingXlsx){return;}
