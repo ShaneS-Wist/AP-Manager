@@ -567,7 +567,7 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
       <!-- VERIFY -->
       <div class="mgmt-section">
         <div class="mgmt-section-title">🔎 Verify Against S2K Export</div>
-        <p>Drop the latest S2K_Invoices.xlsx export. Each invoice is matched by its vendor invoice number and its Invoice Amount, Discount Amount and Net Amount are compared (multiple xlsx rows for the same invoice are summed). A green check marks a match; a red ✕ with the dollar difference marks a mismatch. Badges appear on cards, the invoice modal and calendar days.</p>
+        <p>Drop the latest S2K_Invoices.xlsx export. Each invoice is matched by its vendor invoice number and its Invoice Amount, Discount Amount and Net Amount are compared (multiple xlsx rows for the same invoice are summed; any Credit Memo amount is added into the discount total and reduces net accordingly). A green check marks a match; a red ✕ with the dollar difference marks a mismatch. Badges appear on cards, the invoice modal and calendar days.</p>
         <div class="drop-zone" id="dzXlsx">
           <input type="file" accept=".xlsx,.xls" onchange="loadXlsxFile(this)">
           <div class="drop-icon">📑</div>
@@ -1107,7 +1107,9 @@ function runVerify(){
     const vi=String(row['Vendor Invoice']||'').trim();
     if(!vi)return;
     const amt=parseMoney(row['Invoice Amount']);
-    const disc=parseMoney(row['Discount Amount']);
+    // Credit Memo adds to the discount total (positive there) and so also
+    // flows through into net as a reduction (negative there), since net = amt - disc.
+    const disc=parseMoney(row['Discount Amount'])+parseMoney(row['Credit Memo']);
     if(!map[vi])map[vi]={amt:0,disc:0,count:0};
     map[vi].amt+=amt;map[vi].disc+=disc;map[vi].count++;
   });
