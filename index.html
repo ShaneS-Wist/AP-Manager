@@ -381,6 +381,8 @@ body{font-family:var(--font);background:var(--surface);color:var(--ink);min-heig
     <option value="inv-">Invoice Date: Newest</option>
     <option value="inv">Invoice Date: Oldest</option>
     <option value="tag">Tags: A→Z</option>
+    <option value="ven">Vendor: A→Z</option>
+    <option value="ven-">Vendor: Z→A</option>
   </select>
 </div>
 
@@ -1428,6 +1430,7 @@ function getFiltered(){
   if(s==='inv')d.sort((a,b)=>a.invoiceDate.localeCompare(b.invoiceDate));
   if(s==='inv-')d.sort((a,b)=>b.invoiceDate.localeCompare(a.invoiceDate));
   if(s==='tag')d.sort((a,b)=>{var at=(a.tags||[]).map(function(t){return t.name;}).sort().join(',');var bt=(b.tags||[]).map(function(t){return t.name;}).sort().join(',');if(!at&&bt)return 1;if(at&&!bt)return -1;return at.localeCompare(bt);});
+  if(s==='ven'||s==='ven-'){const dir=s==='ven'?1:-1;d.sort((a,b)=>dir*(a.supplier||'').localeCompare(b.supplier||'',undefined,{sensitivity:'base'})||(a.dueDate||'').localeCompare(b.dueDate||''));}
   return d;
 }
 
